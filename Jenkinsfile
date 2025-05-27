@@ -25,7 +25,7 @@ pipeline {
                     for (service in services) {
                         sh """
                             echo "🚧 Building image for ${service}"
-                            docker build -t $DOCKERHUB_USER/${service}:${params.TAG} ./${service}
+                            docker build -t $DOCKERHUB_USER/${service}:${params.TAG} ./charts/${service}
                         """
                     }
                 }
