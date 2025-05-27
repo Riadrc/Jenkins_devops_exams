@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         DOCKERHUB_USER = 'riadriri'
-        DOCKERHUB_PASSWORD = credentials('DOCKER_HUB_PASS') // Secret à créer dans Jenkins
+        DOCKERHUB_PASSWORD = credentials('DOCKER_HUB_PASS') // Secret Jenkins
     }
 
     parameters {
@@ -14,7 +14,7 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                git branch: 'master', url: 'https://github.com/Riadrc/Jenkins_devops_exams.git'
+                git branch: env.BRANCH_NAME, url: 'https://github.com/Riadrc/Jenkins_devops_exams.git'
             }
         }
 
@@ -48,9 +48,7 @@ pipeline {
         }
 
         stage('Deploy to DEV') {
-            when {
-                branch 'dev'
-            }
+            when { branch 'dev' }
             steps {
                 script {
                     def services = ['movie-service', 'cast-service']
@@ -58,9 +56,9 @@ pipeline {
                         sh """
                             echo "🔧 Deploying ${service} to DEV"
                             helm upgrade --install ${service} charts/${service} \
-                              --namespace dev \
-                              --set image.repository=$DOCKERHUB_USER/${service} \
-                              --set image.tag=${params.TAG}
+                                --namespace dev \
+                                --set image.repository=$DOCKERHUB_USER/${service} \
+                                --set image.tag=${params.TAG}
                         """
                     }
                 }
@@ -68,9 +66,7 @@ pipeline {
         }
 
         stage('Deploy to QA') {
-            when {
-                branch 'qa'
-            }
+            when { branch 'qa' }
             steps {
                 script {
                     def services = ['movie-service', 'cast-service']
@@ -78,9 +74,9 @@ pipeline {
                         sh """
                             echo "🧪 Deploying ${service} to QA"
                             helm upgrade --install ${service} charts/${service} \
-                              --namespace qa \
-                              --set image.repository=$DOCKERHUB_USER/${service} \
-                              --set image.tag=${params.TAG}
+                                --namespace qa \
+                                --set image.repository=$DOCKERHUB_USER/${service} \
+                                --set image.tag=${params.TAG}
                         """
                     }
                 }
@@ -88,9 +84,7 @@ pipeline {
         }
 
         stage('Deploy to STAGING') {
-            when {
-                branch 'staging'
-            }
+            when { branch 'staging' }
             steps {
                 script {
                     def services = ['movie-service', 'cast-service']
@@ -98,9 +92,9 @@ pipeline {
                         sh """
                             echo "🚦 Deploying ${service} to STAGING"
                             helm upgrade --install ${service} charts/${service} \
-                              --namespace staging \
-                              --set image.repository=$DOCKERHUB_USER/${service} \
-                              --set image.tag=${params.TAG}
+                                --namespace staging \
+                                --set image.repository=$DOCKERHUB_USER/${service} \
+                                --set image.tag=${params.TAG}
                         """
                     }
                 }
@@ -108,9 +102,7 @@ pipeline {
         }
 
         stage('Deploy to PROD') {
-            when {
-                branch 'master'
-            }
+            when { branch 'master' }
             steps {
                 input message: "⚠️ Valider le déploiement en PROD ?", ok: 'Déployer'
                 script {
@@ -119,9 +111,9 @@ pipeline {
                         sh """
                             echo "🚨 Deploying ${service} to PROD"
                             helm upgrade --install ${service} charts/${service} \
-                              --namespace prod \
-                              --set image.repository=$DOCKERHUB_USER/${service} \
-                              --set image.tag=${params.TAG}
+                                --namespace prod \
+                                --set image.repository=$DOCKERHUB_USER/${service} \
+                                --set image.tag=${params.TAG}
                         """
                     }
                 }
