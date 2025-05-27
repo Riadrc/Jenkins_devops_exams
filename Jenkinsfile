@@ -7,6 +7,7 @@ pipeline {
     }
 
     parameters {
+        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Branche Git à utiliser pour déclencher le bon environnement')
         string(name: 'TAG', defaultValue: 'dev', description: 'Tag de l’image Docker à utiliser')
     }
 
@@ -42,7 +43,9 @@ pipeline {
         }
 
         stage('Deploy to DEV') {
-            when { branch 'dev' }
+            when {
+                expression { params.BRANCH_NAME == 'dev' }
+            }
             steps {
                 script {
                     def services = ['movie-service', 'cast-service']
@@ -60,7 +63,9 @@ pipeline {
         }
 
         stage('Deploy to QA') {
-            when { branch 'qa' }
+            when {
+                expression { params.BRANCH_NAME == 'qa' }
+            }
             steps {
                 script {
                     def services = ['movie-service', 'cast-service']
@@ -78,7 +83,9 @@ pipeline {
         }
 
         stage('Deploy to STAGING') {
-            when { branch 'staging' }
+            when {
+                expression { params.BRANCH_NAME == 'staging' }
+            }
             steps {
                 script {
                     def services = ['movie-service', 'cast-service']
@@ -96,7 +103,9 @@ pipeline {
         }
 
         stage('Deploy to PROD') {
-            when { branch 'master' }
+            when {
+                expression { params.BRANCH_NAME == 'master' }
+            }
             steps {
                 input message: "⚠️ Valider le déploiement en PROD ?", ok: 'Déployer'
                 script {
