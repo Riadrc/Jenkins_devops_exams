@@ -1,130 +1,132 @@
 pipeline {
-environment { // Declaration of environment variables
-DOCKER_ID = "riadriri" // replace this with your docker-id
-DOCKER_IMAGE = "datascientestapi"
-DOCKER_TAG = "v.${BUILD_ID}.0" // we will tag our images with the current build in order to increment the value by 1 with each new build
-}
-agent any // Jenkins will be able to select all available agents
-stages {
-        stage(' Docker Build'){ // docker build image stage
+    agent any
+
+    environment {
+        DOCKERHUB_USER = 'riadriri'
+        DOCKERHUB_PASSWORD = credentials('DOCKER_HUB_PASS') // Secret à créer dans Jenkins
+    }
+
+    parameters {
+        string(name: 'TAG', defaultValue: 'dev', description: 'Tag de l’image Docker à utiliser')
+    }
+
+    stages {
+
+        stage('Checkout') {
             steps {
-                script {
-                sh '''
-                 docker rm -f jenkins
-                 docker build -t $DOCKER_ID/$DOCKER_IMAGE:$DOCKER_TAG .
-                sleep 6
-                '''
-                }
+                git branch: env.BRANCH_NAME, url: 'https://github.com/Riadrc/Jenkins_devops_exams.git'
             }
         }
-        stage('Docker run'){ // run container from our builded image
-                steps {
-                    script {
-                    sh '''
-                    docker run -d -p 80:80 --name jenkins $DOCKER_ID/$DOCKER_IMAGE:$DOCKER_TAG
-                    sleep 10
-                    '''
+
+        stage('Build Images') {
+            steps {
+                script {
+                    def services = ['movie-service', 'cast-service']
+                    for (service in services) {
+                        sh """
+                            echo "🚧 Building image for ${service}"
+                            docker build -t $DOCKERHUB_USER/${service}:${params.TAG} ./${service}
+                        """
                     }
                 }
             }
+        }
 
-        stage('Test Acceptance'){ // we launch the curl command to validate that the container responds to the request
+        stage('Push Images to DockerHub') {
             steps {
-                    script {
-                    sh '''
-                    curl localhost
-                    '''
+                script {
+                    def services = ['movie-service', 'cast-service']
+                    sh "echo '$DOCKERHUB_PASSWORD' | docker login -u '$DOCKERHUB_USER' --password-stdin"
+                    for (service in services) {
+                        sh """
+                            echo "🚀 Pushing image for ${service}"
+                            docker push $DOCKERHUB_USER/${service}:${params.TAG}
+                        """
                     }
-            }
-
-        }
-        stage('Docker Push'){ //we pass the built image to our docker hub account
-            environment
-            {
-                DOCKER_PASS = credentials("DOCKER_HUB_PASS") // we retrieve  docker password from secret text called docker_hub_pass saved on jenkins
-            }
-
-            steps {
-
-                script {
-                sh '''
-                docker login -u $DOCKER_ID -p $DOCKER_PASS
-                docker push $DOCKER_ID/$DOCKER_IMAGE:$DOCKER_TAG
-                '''
                 }
             }
-
         }
 
-stage('Deploiement en dev'){
-        environment
-        {
-        KUBECONFIG = credentials("config") // we retrieve  kubeconfig from secret file called config saved on jenkins
-        }
+        stage('Deploy to DEV') {
+            when {
+                branch 'dev'
+            }
             steps {
                 script {
-                sh '''
-                rm -Rf .kube
-                mkdir .kube
-                ls
-                cat $KUBECONFIG > .kube/config
-                cp fastapi/values.yaml values.yml
-                cat values.yml
-                sed -i "s+tag.*+tag: ${DOCKER_TAG}+g" values.yml
-                helm upgrade --install app fastapi --values=values.yml --namespace dev
-                '''
-                }
-            }
-
-        }
-stage('Deploiement en staging'){
-        environment
-        {
-        KUBECONFIG = credentials("config") // we retrieve  kubeconfig from secret file called config saved on jenkins
-        }
-            steps {
-                script {
-                sh '''
-                rm -Rf .kube
-                mkdir .kube
-                ls
-                cat $KUBECONFIG > .kube/config
-                cp fastapi/values.yaml values.yml
-                cat values.yml
-                sed -i "s+tag.*+tag: ${DOCKER_TAG}+g" values.yml
-                helm upgrade --install app fastapi --values=values.yml --namespace staging
-                '''
-                }
-            }
-
-        }
-  stage('Deploiement en prod'){
-        environment
-        {
-        KUBECONFIG = credentials("config") // we retrieve  kubeconfig from secret file called config saved on jenkins
-        }
-            steps {
-            // Create an Approval Button with a timeout of 15minutes.
-            // this require a manuel validation in order to deploy on production environment
-                    timeout(time: 15, unit: "MINUTES") {
-                        input message: 'Do you want to deploy in production ?', ok: 'Yes'
+                    def services = ['movie-service', 'cast-service']
+                    for (service in services) {
+                        sh """
+                            echo "🔧 Deploying ${service} to DEV"
+                            helm upgrade --install ${service} charts/${service} \
+                              --namespace dev \
+                              --set image.repository=$DOCKERHUB_USER/${service} \
+                              --set image.tag=${params.TAG}
+                        """
                     }
-
-                script {
-                sh '''
-                rm -Rf .kube
-                mkdir .kube
-                ls
-                cat $KUBECONFIG > .kube/config
-                cp fastapi/values.yaml values.yml
-                cat values.yml
-                sed -i "s+tag.*+tag: ${DOCKER_TAG}+g" values.yml
-                helm upgrade --install app fastapi --values=values.yml --namespace prod
-                '''
                 }
             }
-
         }
 
+        stage('Deploy to QA') {
+            when {
+                branch 'qa'
+            }
+            steps {
+                script {
+                    def services = ['movie-service', 'cast-service']
+                    for (service in services) {
+                        sh """
+                            echo "🧪 Deploying ${service} to QA"
+                            helm upgrade --install ${service} charts/${service} \
+                              --namespace qa \
+                              --set image.repository=$DOCKERHUB_USER/${service} \
+                              --set image.tag=${params.TAG}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to STAGING') {
+            when {
+                branch 'staging'
+            }
+            steps {
+                script {
+                    def services = ['movie-service', 'cast-service']
+                    for (service in services) {
+                        sh """
+                            echo "🚦 Deploying ${service} to STAGING"
+                            helm upgrade --install ${service} charts/${service} \
+                              --namespace staging \
+                              --set image.repository=$DOCKERHUB_USER/${service} \
+                              --set image.tag=${params.TAG}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to PROD') {
+            when {
+                branch 'master'
+            }
+            steps {
+                input message: "⚠️ Valider le déploiement en PROD ?", ok: 'Déployer'
+                script {
+                    def services = ['movie-service', 'cast-service']
+                    for (service in services) {
+                        sh """
+                            echo "🚨 Deploying ${service} to PROD"
+                            helm upgrade --install ${service} charts/${service} \
+                              --namespace prod \
+                              --set image.repository=$DOCKERHUB_USER/${service} \
+                              --set image.tag=${params.TAG}
+                        """
+                    }
+                }
+            }
+        }
+    }
 }
-}
+
