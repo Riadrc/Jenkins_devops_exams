@@ -1,127 +1,104 @@
 pipeline {
-    agent any
+  agent any
 
-    environment {
-        DOCKERHUB_USER = 'riadriri'
-        DOCKERHUB_PASSWORD = credentials('DOCKER_HUB_PASS') // Secret Jenkins
+  environment {
+    REGISTRY = "docker.io"
+    DOCKERHUB_USER = "riadriri"
+    IMAGE_TAG = "v1.0.${BUILD_NUMBER}"
+  }
+
+  parameters {
+    string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Environnement de déploiement (dev, staging, prod)')
+  }
+
+  stages {
+    stage('Docker Build') {
+      parallel {
+        stage('Build cast-service') {
+          steps {
+            dir('charts/cast-service') {
+              sh """
+                echo "📂 Position actuelle:"
+                pwd
+                echo "📂 Fichiers présents:"
+                ls -l
+
+                echo "🚧 Building cast-service"
+                docker build -t $DOCKERHUB_USER/cast-service:$IMAGE_TAG .
+              """
+            }
+          }
+        }
+
+        stage('Build movie-service') {
+          steps {
+            dir('charts/movie-service') {
+              sh """
+                echo "📂 Position actuelle:"
+                pwd
+                echo "📂 Fichiers présents:"
+                ls -l
+
+                echo "🚧 Building movie-service"
+                docker build -t $DOCKERHUB_USER/movie-service:$IMAGE_TAG .
+              """
+            }
+          }
+        }
+      }
     }
 
-    parameters {
-        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Branche Git à utiliser pour déclencher le bon environnement')
-        string(name: 'TAG', defaultValue: 'dev', description: 'Tag de l’image Docker à utiliser')
+    stage('Docker Push') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+          sh """
+            echo "🔐 Logging into DockerHub"
+            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+
+            echo "🚀 Pushing cast-service image"
+            docker push $DOCKERHUB_USER/cast-service:$IMAGE_TAG
+
+            echo "🚀 Pushing movie-service image"
+            docker push $DOCKERHUB_USER/movie-service:$IMAGE_TAG
+          """
+        }
+      }
     }
 
-    stages {
-
-        stage('Build Images') {
-            steps {
-                script {
-                    def services = ['movie-service', 'cast-service']
-                    for (service in services) {
-                        sh """
-                            echo "🚧 Building image for ${service}"
-                            docker build -t $DOCKERHUB_USER/${service}:${params.TAG} ./charts/${service}
-                        """
-                    }
-                }
-            }
+    stage('Deploy') {
+      steps {
+        script {
+          if (params.ENVIRONMENT == 'dev') {
+            sh """
+              echo "🔧 Deploying to DEV"
+              helm upgrade --install cast-dev ./helm/cast-service --namespace dev --set image.tag=$IMAGE_TAG
+              helm upgrade --install movie-dev ./helm/movie-service --namespace dev --set image.tag=$IMAGE_TAG
+            """
+          } else if (params.ENVIRONMENT == 'staging') {
+            sh """
+              echo "🚧 Deploying to STAGING"
+              helm upgrade --install cast-staging ./helm/cast-service --namespace staging --set image.tag=$IMAGE_TAG
+              helm upgrade --install movie-staging ./helm/movie-service --namespace staging --set image.tag=$IMAGE_TAG
+            """
+          } else if (params.ENVIRONMENT == 'prod') {
+            input message: "⚠️ Confirmer le déploiement en PROD ?", ok: "Déployer"
+            sh """
+              echo "🚨 Deploying to PROD"
+              helm upgrade --install cast-prod ./helm/cast-service --namespace prod --set image.tag=$IMAGE_TAG
+              helm upgrade --install movie-prod ./helm/movie-service --namespace prod --set image.tag=$IMAGE_TAG
+            """
+          } else {
+            error("❌ Environnement inconnu: ${params.ENVIRONMENT}")
+          }
         }
-
-        stage('Push Images to DockerHub') {
-            steps {
-                script {
-                    def services = ['movie-service', 'cast-service']
-                    sh "echo '$DOCKERHUB_PASSWORD' | docker login -u '$DOCKERHUB_USER' --password-stdin"
-                    for (service in services) {
-                        sh """
-                            echo "🚀 Pushing image for ${service}"
-                            docker push $DOCKERHUB_USER/${service}:${params.TAG}
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to DEV') {
-            when {
-                expression { params.BRANCH_NAME == 'dev' }
-            }
-            steps {
-                script {
-                    def services = ['movie-service', 'cast-service']
-                    for (service in services) {
-                        sh """
-                            echo "🔧 Deploying ${service} to DEV"
-                            helm upgrade --install ${service} charts/${service} \
-                                --namespace dev \
-                                --set image.repository=$DOCKERHUB_USER/${service} \
-                                --set image.tag=${params.TAG}
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to QA') {
-            when {
-                expression { params.BRANCH_NAME == 'qa' }
-            }
-            steps {
-                script {
-                    def services = ['movie-service', 'cast-service']
-                    for (service in services) {
-                        sh """
-                            echo "🧪 Deploying ${service} to QA"
-                            helm upgrade --install ${service} charts/${service} \
-                                --namespace qa \
-                                --set image.repository=$DOCKERHUB_USER/${service} \
-                                --set image.tag=${params.TAG}
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to STAGING') {
-            when {
-                expression { params.BRANCH_NAME == 'staging' }
-            }
-            steps {
-                script {
-                    def services = ['movie-service', 'cast-service']
-                    for (service in services) {
-                        sh """
-                            echo "🚦 Deploying ${service} to STAGING"
-                            helm upgrade --install ${service} charts/${service} \
-                                --namespace staging \
-                                --set image.repository=$DOCKERHUB_USER/${service} \
-                                --set image.tag=${params.TAG}
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to PROD') {
-            when {
-                expression { params.BRANCH_NAME == 'master' }
-            }
-            steps {
-                input message: "⚠️ Valider le déploiement en PROD ?", ok: 'Déployer'
-                script {
-                    def services = ['movie-service', 'cast-service']
-                    for (service in services) {
-                        sh """
-                            echo "🚨 Deploying ${service} to PROD"
-                            helm upgrade --install ${service} charts/${service} \
-                                --namespace prod \
-                                --set image.repository=$DOCKERHUB_USER/${service} \
-                                --set image.tag=${params.TAG}
-                        """
-                    }
-                }
-            }
-        }
+      }
     }
+  }
+
+  post {
+    always {
+      echo "✅ Pipeline terminé avec le tag: $IMAGE_TAG"
+    }
+  }
 }
 
