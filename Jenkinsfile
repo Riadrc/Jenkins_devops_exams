@@ -13,41 +13,44 @@ pipeline {
 
   stages {
 
-    // 🚨 NOUVEAU STAGE DEBUG
-    stage('Docker Debug') {
+    stage('Docker Build') {
       steps {
+        // 🔍 Debug avant build
         sh '''
-          echo "📁 Répertoire courant et son contenu :"
+          echo "📁 Affichage du répertoire courant et des fichiers"
           pwd
           ls -l
-          echo "📁 Contenu du dossier charts/cast-service :"
+          
+          echo "📁 Contenu de charts/cast-service :"
           ls -l charts/cast-service
-          echo "📁 Contenu du dossier charts/movie-service :"
+          
+          echo "📁 Contenu de charts/movie-service :"
           ls -l charts/movie-service
-        '''
-      }
-    }
 
-    stage('Docker Build') {
-      parallel {
-        stage('Build cast-service') {
-          steps {
-            dir('charts/cast-service') {
-              sh """
-                echo "🚧 Building cast-service"
-                docker build -t $DOCKERHUB_USER/cast-service:$IMAGE_TAG .
-              """
+          echo "🔍 Recherche de tous les Dockerfile dans le repo"
+          find . -name Dockerfile
+        '''
+        
+        parallel {
+          stage('Build cast-service') {
+            steps {
+              dir('charts/cast-service') {
+                sh '''
+                  echo "🚧 Building cast-service"
+                  docker build -t $DOCKERHUB_USER/cast-service:$IMAGE_TAG .
+                '''
+              }
             }
           }
-        }
 
-        stage('Build movie-service') {
-          steps {
-            dir('charts/movie-service') {
-              sh """
-                echo "🚧 Building movie-service"
-                docker build -t $DOCKERHUB_USER/movie-service:$IMAGE_TAG .
-              """
+          stage('Build movie-service') {
+            steps {
+              dir('charts/movie-service') {
+                sh '''
+                  echo "🚧 Building movie-service"
+                  docker build -t $DOCKERHUB_USER/movie-service:$IMAGE_TAG .
+                '''
+              }
             }
           }
         }
@@ -57,7 +60,7 @@ pipeline {
     stage('Docker Push') {
       steps {
         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-          sh """
+          sh '''
             echo "🔐 Logging into DockerHub"
             echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
@@ -66,7 +69,7 @@ pipeline {
 
             echo "🚀 Pushing movie-service image"
             docker push $DOCKERHUB_USER/movie-service:$IMAGE_TAG
-          """
+          '''
         }
       }
     }
@@ -75,24 +78,24 @@ pipeline {
       steps {
         script {
           if (params.ENVIRONMENT == 'dev') {
-            sh """
+            sh '''
               echo "🔧 Deploying to DEV"
               helm upgrade --install cast-dev ./helm/cast-service --namespace dev --set image.tag=$IMAGE_TAG
               helm upgrade --install movie-dev ./helm/movie-service --namespace dev --set image.tag=$IMAGE_TAG
-            """
+            '''
           } else if (params.ENVIRONMENT == 'staging') {
-            sh """
+            sh '''
               echo "🚧 Deploying to STAGING"
               helm upgrade --install cast-staging ./helm/cast-service --namespace staging --set image.tag=$IMAGE_TAG
               helm upgrade --install movie-staging ./helm/movie-service --namespace staging --set image.tag=$IMAGE_TAG
-            """
+            '''
           } else if (params.ENVIRONMENT == 'prod') {
             input message: "⚠️ Confirmer le déploiement en PROD ?", ok: "Déployer"
-            sh """
+            sh '''
               echo "🚨 Deploying to PROD"
               helm upgrade --install cast-prod ./helm/cast-service --namespace prod --set image.tag=$IMAGE_TAG
               helm upgrade --install movie-prod ./helm/movie-service --namespace prod --set image.tag=$IMAGE_TAG
-            """
+            '''
           } else {
             error("❌ Environnement inconnu: ${params.ENVIRONMENT}")
           }
