@@ -12,17 +12,28 @@ pipeline {
   }
 
   stages {
+
+    // 🚨 NOUVEAU STAGE DEBUG
+    stage('Docker Debug') {
+      steps {
+        sh '''
+          echo "📁 Répertoire courant et son contenu :"
+          pwd
+          ls -l
+          echo "📁 Contenu du dossier charts/cast-service :"
+          ls -l charts/cast-service
+          echo "📁 Contenu du dossier charts/movie-service :"
+          ls -l charts/movie-service
+        '''
+      }
+    }
+
     stage('Docker Build') {
       parallel {
         stage('Build cast-service') {
           steps {
             dir('charts/cast-service') {
               sh """
-                echo "📂 Position actuelle:"
-                pwd
-                echo "📂 Fichiers présents:"
-                ls -l
-
                 echo "🚧 Building cast-service"
                 docker build -t $DOCKERHUB_USER/cast-service:$IMAGE_TAG .
               """
@@ -34,11 +45,6 @@ pipeline {
           steps {
             dir('charts/movie-service') {
               sh """
-                echo "📂 Position actuelle:"
-                pwd
-                echo "📂 Fichiers présents:"
-                ls -l
-
                 echo "🚧 Building movie-service"
                 docker build -t $DOCKERHUB_USER/movie-service:$IMAGE_TAG .
               """
