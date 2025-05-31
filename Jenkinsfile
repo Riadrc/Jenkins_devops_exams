@@ -15,15 +15,21 @@ pipeline {
 
     stage('Docker Build') {
       steps {
+        // ➔ Ajout de debug ici
+        sh '''
+          echo "📁 Affichage du répertoire courant et des fichiers"
+          pwd
+          ls -l
+          echo "📁 Contenu de charts/cast-service :"
+          ls -l charts/cast-service
+          echo "📁 Contenu de charts/movie-service :"
+          ls -l charts/movie-service
+        '''
         parallel {
           stage('Build cast-service') {
             steps {
               dir('charts/cast-service') {
                 sh """
-                  echo "📁 Current directory (cast-service):"
-                  pwd
-                  echo "📂 Listing files:"
-                  ls -l
                   echo "🚧 Building cast-service"
                   docker build -f Dockerfile -t $DOCKERHUB_USER/cast-service:$IMAGE_TAG .
                 """
@@ -35,10 +41,6 @@ pipeline {
             steps {
               dir('charts/movie-service') {
                 sh """
-                  echo "📁 Current directory (movie-service):"
-                  pwd
-                  echo "📂 Listing files:"
-                  ls -l
                   echo "🚧 Building movie-service"
                   docker build -f Dockerfile -t $DOCKERHUB_USER/movie-service:$IMAGE_TAG .
                 """
