@@ -13,7 +13,7 @@ pipeline {
 
   stages {
     stage('Docker Build') {
-      parallel { // <<< parallel doit être directement sous stage
+      parallel {
         stage('Build cast-service') {
           steps {
             dir('charts/cast-service') {
@@ -24,7 +24,6 @@ pipeline {
             }
           }
         }
-
         stage('Build movie-service') {
           steps {
             dir('charts/movie-service') {
@@ -61,21 +60,21 @@ pipeline {
           if (params.ENVIRONMENT == 'dev') {
             sh """
               echo "🔧 Deploying to DEV"
-              helm upgrade --install cast-dev ./helm/cast-service --namespace dev --set image.tag=$IMAGE_TAG
-              helm upgrade --install movie-dev ./helm/movie-service --namespace dev --set image.tag=$IMAGE_TAG
+              helm upgrade --install cast-dev ./charts/cast-service --namespace dev --set image.tag=$IMAGE_TAG
+              helm upgrade --install movie-dev ./charts/movie-service --namespace dev --set image.tag=$IMAGE_TAG
             """
           } else if (params.ENVIRONMENT == 'staging') {
             sh """
               echo "🚧 Deploying to STAGING"
-              helm upgrade --install cast-staging ./helm/cast-service --namespace staging --set image.tag=$IMAGE_TAG
-              helm upgrade --install movie-staging ./helm/movie-service --namespace staging --set image.tag=$IMAGE_TAG
+              helm upgrade --install cast-staging ./charts/cast-service --namespace staging --set image.tag=$IMAGE_TAG
+              helm upgrade --install movie-staging ./charts/movie-service --namespace staging --set image.tag=$IMAGE_TAG
             """
           } else if (params.ENVIRONMENT == 'prod') {
             input message: "⚠️ Confirmer le déploiement en PROD ?", ok: "Déployer"
             sh """
               echo "🚨 Deploying to PROD"
-              helm upgrade --install cast-prod ./helm/cast-service --namespace prod --set image.tag=$IMAGE_TAG
-              helm upgrade --install movie-prod ./helm/movie-service --namespace prod --set image.tag=$IMAGE_TAG
+              helm upgrade --install cast-prod ./charts/cast-service --namespace prod --set image.tag=$IMAGE_TAG
+              helm upgrade --install movie-prod ./charts/movie-service --namespace prod --set image.tag=$IMAGE_TAG
             """
           } else {
             error("❌ Environnement inconnu: ${params.ENVIRONMENT}")
