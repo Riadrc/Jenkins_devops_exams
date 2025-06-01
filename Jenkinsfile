@@ -13,27 +13,25 @@ pipeline {
 
   stages {
     stage('Docker Build') {
-      steps {                     // <<< CORRECTION : steps avant parallel
-        parallel {
-          stage('Build cast-service') {
-            steps {
-              dir('charts/cast-service') {
-                sh """
-                  echo "🚧 Building cast-service"
-                  docker build -f Dockerfile -t $DOCKERHUB_USER/cast-service:$IMAGE_TAG .
-                """
-              }
+      parallel { // <<< parallel doit être directement sous stage
+        stage('Build cast-service') {
+          steps {
+            dir('charts/cast-service') {
+              sh """
+                echo "🚧 Building cast-service"
+                docker build -f Dockerfile -t $DOCKERHUB_USER/cast-service:$IMAGE_TAG .
+              """
             }
           }
+        }
 
-          stage('Build movie-service') {
-            steps {
-              dir('charts/movie-service') {
-                sh """
-                  echo "🚧 Building movie-service"
-                  docker build -f Dockerfile -t $DOCKERHUB_USER/movie-service:$IMAGE_TAG .
-                """
-              }
+        stage('Build movie-service') {
+          steps {
+            dir('charts/movie-service') {
+              sh """
+                echo "🚧 Building movie-service"
+                docker build -f Dockerfile -t $DOCKERHUB_USER/movie-service:$IMAGE_TAG .
+              """
             }
           }
         }
