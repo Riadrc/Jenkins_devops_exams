@@ -90,7 +90,7 @@ pipeline {
 
   post {
     always {
-      echo "✅ Bis_Pipeline terminé avec le tag: $IMAGE_TAG"
+      echo "✅ Pipeline terminé avec le tag: $IMAGE_TAG"
     }
   }
 }
