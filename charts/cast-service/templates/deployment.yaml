@@ -18,4 +18,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.service.targetPort }}
+          env:
+            - name: DATABASE_URI
+              value: "postgresql://admin:password@db:5432/storedb"
 
