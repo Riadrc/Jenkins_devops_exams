@@ -5,6 +5,7 @@ pipeline {
     REGISTRY = "docker.io"
     DOCKERHUB_USER = "riadriri"
     IMAGE_TAG = "v1.0.${BUILD_NUMBER}"
+    KUBECONFIG = "/var/lib/jenkins/.kube/config"   // ✅ Important pour kubectl / helm
   }
 
   parameters {
@@ -13,24 +14,26 @@ pipeline {
 
   stages {
     stage('Docker Build') {
-      parallel {
-        stage('Build cast-service') {
-          steps {
-            dir('charts/cast-service') {
-              sh '''
-                echo "🚧 Building cast-service"
-                docker build -f Dockerfile -t $DOCKERHUB_USER/cast-service:$IMAGE_TAG .
-              '''
+      steps {
+        parallel {
+          stage('Build cast-service') {
+            steps {
+              dir('charts/cast-service') {
+                sh """
+                  echo "🚧 Building cast-service"
+                  docker build -f Dockerfile -t $DOCKERHUB_USER/cast-service:$IMAGE_TAG .
+                """
+              }
             }
           }
-        }
-        stage('Build movie-service') {
-          steps {
-            dir('charts/movie-service') {
-              sh '''
-                echo "🚧 Building movie-service"
-                docker build -f Dockerfile -t $DOCKERHUB_USER/movie-service:$IMAGE_TAG .
-              '''
+          stage('Build movie-service') {
+            steps {
+              dir('charts/movie-service') {
+                sh """
+                  echo "🚧 Building movie-service"
+                  docker build -f Dockerfile -t $DOCKERHUB_USER/movie-service:$IMAGE_TAG .
+                """
+              }
             }
           }
         }
@@ -40,7 +43,7 @@ pipeline {
     stage('Docker Push') {
       steps {
         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-          sh '''
+          sh """
             echo "🔐 Logging into DockerHub"
             echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
@@ -49,7 +52,7 @@ pipeline {
 
             echo "🚀 Pushing movie-service image"
             docker push $DOCKERHUB_USER/movie-service:$IMAGE_TAG
-          '''
+          """
         }
       }
     }
@@ -58,24 +61,24 @@ pipeline {
       steps {
         script {
           if (params.ENVIRONMENT == 'dev') {
-            sh '''
+            sh """
               echo "🔧 Deploying to DEV"
               helm upgrade --install cast-dev ./helm/cast-service --namespace dev --set image.tag=$IMAGE_TAG
               helm upgrade --install movie-dev ./helm/movie-service --namespace dev --set image.tag=$IMAGE_TAG
-            '''
+            """
           } else if (params.ENVIRONMENT == 'staging') {
-            sh '''
+            sh """
               echo "🚧 Deploying to STAGING"
               helm upgrade --install cast-staging ./helm/cast-service --namespace staging --set image.tag=$IMAGE_TAG
               helm upgrade --install movie-staging ./helm/movie-service --namespace staging --set image.tag=$IMAGE_TAG
-            '''
+            """
           } else if (params.ENVIRONMENT == 'prod') {
             input message: "⚠️ Confirmer le déploiement en PROD ?", ok: "Déployer"
-            sh '''
+            sh """
               echo "🚨 Deploying to PROD"
               helm upgrade --install cast-prod ./helm/cast-service --namespace prod --set image.tag=$IMAGE_TAG
               helm upgrade --install movie-prod ./helm/movie-service --namespace prod --set image.tag=$IMAGE_TAG
-            '''
+            """
           } else {
             error("❌ Environnement inconnu: ${params.ENVIRONMENT}")
           }
