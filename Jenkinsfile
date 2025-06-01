@@ -5,7 +5,6 @@ pipeline {
     REGISTRY = "docker.io"
     DOCKERHUB_USER = "riadriri"
     IMAGE_TAG = "v1.0.${BUILD_NUMBER}"
-    KUBECONFIG = "/var/lib/jenkins/.kube/config"   // ✅ Important pour kubectl / helm
   }
 
   parameters {
@@ -14,7 +13,7 @@ pipeline {
 
   stages {
     stage('Docker Build') {
-      steps {
+      steps {                     // <<< CORRECTION : steps avant parallel
         parallel {
           stage('Build cast-service') {
             steps {
@@ -26,6 +25,7 @@ pipeline {
               }
             }
           }
+
           stage('Build movie-service') {
             steps {
               dir('charts/movie-service') {
