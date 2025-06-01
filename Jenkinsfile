@@ -15,16 +15,6 @@ pipeline {
 
     stage('Docker Build') {
       steps {
-        // ➔ Ajout de debug ici
-        sh '''
-          echo "📁 Affichage du répertoire courant et des fichiers"
-          pwd
-          ls -l
-          echo "📁 Contenu de charts/cast-service :"
-          ls -l charts/cast-service
-          echo "📁 Contenu de charts/movie-service :"
-          ls -l charts/movie-service
-        '''
         parallel {
           stage('Build cast-service') {
             steps {
